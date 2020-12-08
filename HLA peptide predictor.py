@@ -37,10 +37,8 @@ class ImportFile:
         
         if self.filetype == 'csv':
             pd_data = pd.read_csv(self.filename)
-            
-            
-                         
-            return PeptideList(np.array(pd_data['Sequence']))
+                           
+            return PeptideList(np.array(pd_data))
         
         else:
             print("Error: Please enter a CSV file.")
@@ -60,10 +58,11 @@ class PeptideList:
         pep_list = []
         for pep in self.seqs:
             #select only 9mers
-            if len(pep) == 9:            
-                pep_list.append(pep)
+                      
+            if len(pep[0]) == 9:            
+                pep_list.append(pep[0])
             
-                
+        print("pep list", pep_list)
         return PeptideList(pep_list)
     
     
@@ -162,7 +161,7 @@ def Random_Forest_Classifier(
         plt.xlabel('Relative Importance')
         plt.show()
 
-def ANN(x_train, x_test, y_train, y_test, layers = 2, epochs = 20):
+def ANN(x_train, x_test, y_train, y_test, layers = 5, epochs = 50):
     
     #initialize ANN model
     model = Sequential()
@@ -193,12 +192,14 @@ def main(file, algorithm = 'RandomForest'):
     
     # import file     
     file = ImportFile(file)
+    # print(file)
     
     # get sequence data from file
     data = file.data()
+    # print(data.seqs)
     
     # isolate 9mers from sequences
-    nine_mers = data.nine_merize()    
+    nine_mers = data.nine_merize()  
     
     # encode amino acids into numbers for analysis
     coded_mers = nine_mers.num_encode()
@@ -206,7 +207,7 @@ def main(file, algorithm = 'RandomForest'):
       
     # GENERATE NP ARRAY OF POSITIVE DATA
     pos_data = coded_mers.seqs
-   
+       
     
     # GENERATE NP ARRAY OF RANDOM NEGATIVE DATA
     rand_data = rand_peptides(9, len(pos_data)).num_encode().seqs
@@ -226,7 +227,10 @@ def main(file, algorithm = 'RandomForest'):
     
     # MAKE TRAIN AND TEST SETS
     x_train, x_test, y_train, y_test = train_test_split(
-        combined_data, combined_target, train_size=0.8, random_state=509)
+        combined_data, 
+        combined_target, 
+        train_size=0.8, 
+        random_state=509)
     
     
     '''Run the models!!'''
@@ -234,17 +238,19 @@ def main(file, algorithm = 'RandomForest'):
         Random_Forest_Classifier(x_train, x_test, y_train, y_test)
     
     elif algorithm == 'ANN':
-        ANN(x_train, x_test, y_train, y_test, 5, 20)
+        ANN(x_train, x_test, y_train, y_test, 10, 50)
         
     elif algorithm == 'DecisionTree':
         Tree_Classifier(x_train, x_test, y_train, y_test)
         
     else:
-        print("Select an algorithm: ANN, RandomForest, DecisionTree")
+        print("Select algorithm: ANN, RandomForest, DecisionTree")
     
     
     
 if __name__ == "__main__":
-    main("dimarco_peptides.csv", 'RandomForest')
+    main("sarkizova_peptides.csv", 'ANN')
+    main("dimarco_peptides.csv", 'ANN')
+    main('C1601_combined_peptides.csv', 'ANN')
 
 
