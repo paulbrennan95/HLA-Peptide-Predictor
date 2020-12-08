@@ -24,74 +24,94 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 
 
-# from sklearn.ensemble import RandomForestClassifier
-
-
-class Peptide:
-    def __init__(self, seq):
-        self.seq = seq 
-        
-        
-    def change(self):
-        return self.seq + ("XXX")
-    
-
-
-# Specify an ordering of amino acids for vectorizing peptide sequence
-   
 codes = ['A', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L',
-         'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'V', 'W', 'Y']
+             'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'V', 'W', 'Y']
+        
 
-
-dim_tab = pd.read_csv("dimarco_peptides.csv")
-
-
-
-
-def nine_merize(sequence):
-    #initialize pep_list
-    pep_list = []
-    for pep in sequence:
-        #select only 9mers
-        if len(pep) == 9:            
-            pep_list.append(pep)
+class ImportFile:
+    def __init__(self, filename, filetype = 'csv'):
+        self.filename = filename
+        self.filetype = filetype
+        
+    def data(self):
+        
+        if self.filetype == 'csv':
+            pd_data = pd.read_csv(self.filename)
             
-    return pep_list
-
-def label_encode(sequence):
-    le = LabelEncoder()
-    le.fit_transform(sequence)
-    
-    
-        
-def num_encode(sequence):
-    ''' input a list list/series of peptides in single letter format to 
-    generate a list of numerized peptides'''
-    
-    #initialize peptide sequence
-    pep_list = []
-    for pep in sequence:
-        
-        #initialize amino acid sequence per peptide
-        aa_seq = []
-        for aa in pep:           
-            #change each peptide letter to a number from codes list
-            aa_seq.append(int(codes.index(aa)))
             
-        #add the numerized peptide to the big list
-        pep_list.append(aa_seq)
-    
-    return np.array(pep_list)
+                         
+            return PeptideList(np.array(pd_data['Sequence']))
         
-def target_vec(array, value):
-    return np.array([value]*len(array))
+        else:
+            print("Error: Please enter a CSV file.")
+     
+            pass
+     
+    
+        
+class PeptideList:
+    def __init__(self, sequence_list):
+        self.seqs = sequence_list 
+        
+    
+    
+    def nine_merize(self):
+        #initialize pep_list
+        pep_list = []
+        for pep in self.seqs:
+            #select only 9mers
+            if len(pep) == 9:            
+                pep_list.append(pep)
+            
+                
+        return PeptideList(pep_list)
+    
+    
+    
+    def label_encode(self):       
+        return Peptide(LabelEncoder().fit_transform(self.seqs))
+        
+        
+            
+    def num_encode(self):
+        ''' input a list list/series of peptides in single letter format to 
+        generate a list of numerized peptides'''
+        
+        #list of letter codes whose indices serve as number for encoding
+        
+        #initialize peptide sequence
+        pep_list = []
+        for pep in self.seqs:
+            
+            #initialize amino acid sequence per peptide
+            aa_seq = []
+            for aa in pep:           
+                #change each peptide letter to a number from codes list
+                aa_seq.append(int(codes.index(aa)))
+                
+            #add the numerized peptide to the big list
+            pep_list.append(aa_seq)
+        
+        return PeptideList(np.array(pep_list))
+    
+    def add_target_vec(self, value):
+        '''creates vector of single value (say, 0 or 1) '''
+        return TargetVector(np.array([value]*len(self.seqs)))
+
+
+
+class TargetVector:
+    def __init__(self, target_vector):
+        self.target = target_vector
+        self.length = len(target_vector)
 
 def rand_peptides(length, number):
     rand_list = []
     for pep in range(number):
+        #makes list of random letters of said length, and makes string
         rand_list.append(''.join(map(str, (random.sample(codes, k=length))))) 
-        # rand_list.append(random.sample(codes, k=length))
-    return np.array(rand_list)
+        
+    return PeptideList(np.array(rand_list))
     
 def Tree_Classifier(
         x_train, x_test, y_train, y_test):
@@ -166,34 +186,65 @@ def ANN(x_train, x_test, y_train, y_test, layers = 2, epochs = 20):
     model.evaluate(x_test, y_test)
     
 
-'''organize train and test data'''
+def main(file, algorithm = 'RandomForest'):
+    
+    
+    '''organize train and test data'''
+    
+    # import file     
+    file = ImportFile(file)
+    
+    # get sequence data from file
+    data = file.data()
+    
+    # isolate 9mers from sequences
+    nine_mers = data.nine_merize()    
+    
+    # encode amino acids into numbers for analysis
+    coded_mers = nine_mers.num_encode()
+    
+      
+    # GENERATE NP ARRAY OF POSITIVE DATA
+    pos_data = coded_mers.seqs
+   
+    
+    # GENERATE NP ARRAY OF RANDOM NEGATIVE DATA
+    rand_data = rand_peptides(9, len(pos_data)).num_encode().seqs
+    
+    
+    # GENERATE TARGET VECTORS WITH 1 FOR BINDERS, 0 FOR NON BINDERS 
+    pos_target = coded_mers.add_target_vec(1).target
+    
+    rand_target = coded_mers.add_target_vec(0).target
+    
+   
+    
+    # CONCATENATE POS+NEG ARRAYS and TARGET VECTORS FOR TRAINING AND TESTING
+         
+    combined_data = np.concatenate((pos_data, rand_data))
+    combined_target = np.concatenate((pos_target, rand_target))
+    
+    # MAKE TRAIN AND TEST SETS
+    x_train, x_test, y_train, y_test = train_test_split(
+        combined_data, combined_target, train_size=0.8, random_state=509)
+    
+    
+    '''Run the models!!'''
+    if algorithm == 'RandomForest':
+        Random_Forest_Classifier(x_train, x_test, y_train, y_test)
+    
+    elif algorithm == 'ANN':
+        ANN(x_train, x_test, y_train, y_test, 5, 20)
+        
+    elif algorithm == 'DecisionTree':
+        Tree_Classifier(x_train, x_test, y_train, y_test)
+        
+    else:
+        print("Select an algorithm: ANN, RandomForest, DecisionTree")
+    
+    
+    
+if __name__ == "__main__":
+    main("dimarco_peptides.csv", 'RandomForest')
 
-
-# GENERATE NP ARRAY OF POSITIVE DATA
-pos_data = np.array(num_encode(nine_merize(dim_tab['Sequence'])))
-
-# GENERATE NP ARRAY OF RANDOM NEGATIVE DATA
-rand_data = num_encode(rand_peptides(9, len(pos_data)))
-
-# GENERATE TARGET VECTORS WITH 1 FOR BINDERS, 0 FOR NON BINDERS 
-pos_target = target_vec(pos_data, 1)
-rand_target = target_vec(rand_data, 0)
-
-
-# CONCATENATE POSITIVE AND NEGATIVE ARRAYS 
-     #  AND TARGET VECTORS FOR TRAINING AND TESTING
-     
-combined_data = np.concatenate((pos_data, rand_data))
-combined_target = np.concatenate((pos_target, rand_target))
-
-# MAKE TRAIN AND TEST SETS
-x_train, x_test, y_train, y_test = train_test_split(
-    combined_data, combined_target, train_size=0.8, random_state=509)
-
-
-'''Run the models!!'''
-
-# ANN(x_train, x_test, y_train, y_test, 5, 20)
-Tree_Classifier(x_train, x_test, y_train, y_test)
-# Random_Forest_Classifier(x_train, x_test, y_train, y_test)
 
